@@ -1,7 +1,8 @@
 import os
 import tempfile
 from functools import wraps
-from flask import Flask, request, jsonify
+# UPDATED IMPORT: Added render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for 
 from mega import Mega
 
 # --- 1. ENVIRONMENT VARIABLE SETUP ---
@@ -11,7 +12,7 @@ MEGA_EMAIL = os.environ.get('MEGA_EMAIL')
 MEGA_PASSWORD = os.environ.get('MEGA_PASSWORD')
 MEGA_FOLDER_NAME = os.environ.get('MEGA_FOLDER_NAME', 'Uploaded_Data')
 
-# NEW: Read the secret API key for security
+# Read the secret API key for security
 API_SECRET_KEY = os.environ.get('API_SECRET_KEY') 
 
 app = Flask(__name__)
@@ -46,20 +47,87 @@ def require_api_key(f):
 
 # --- 4. ROUTES ---
 
+# MODIFIED ROOT ROUTE: Now renders the dashboard.html template
 @app.route('/', methods=['GET'])
 def index():
     m = login_mega()
-    if m:
-        # Simple health check
-        return jsonify({
-            "status": "Server and MEGA are connected.",
-            "storage_plan": f"{m.get_storage_space(giga=True)['used']} GB Used / {m.get_storage_space(giga=True)['total']} GB Total"
-        })
-    else:
-        return jsonify({"status": "error", "message": "MEGA service is unavailable."}), 503
+    status_class = 'status-error'
+    status_message = 'MEGA service is unavailable. Check credentials.'
+    storage_used = None
+    storage_total = None
 
+    if m:
+        try:
+            storage = m.get_storage_space(giga=True)
+            storage_used = round(storage['used'], 2)
+            storage_total = round(storage['total'], 2)
+            status_class = 'status-success'
+            status_message = 'Server and MEGA are connected.'
+        except Exception:
+            status_message = 'MEGA connected, but failed to retrieve storage space.'
+
+    # Handle messages passed from redirects (e.g., after an upload)
+    message_text = request.args.get('message_text')
+    message_class = request.args.get('message_class')
+    
+    return render_template(
+        'dashboard.html',
+        status_class=status_class,
+        status_message=status_message,
+        storage_used=storage_used,
+        storage_total=storage_total,
+        message_text=message_text,
+        message_class=message_class
+    )
+
+# NEW ROUTE: Handles file uploads from the web browser form
+@app.route('/upload_via_dashboard', methods=['POST'])
+def upload_file_dashboard():
+    m = login_mega()
+    if m is None:
+        return redirect(url_for('index', message_text="MEGA service is unavailable.", message_class="msg-error"))
+
+    if 'file' not in request.files:
+        return redirect(url_for('index', message_text="No file part in the request.", message_class="msg-error"))
+
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('index', message_text="No selected file.", message_class="msg-error"))
+    
+    filename = file.filename
+    temp_file_path = None
+    
+    try:
+        # Save the file temporarily
+        with tempfile.NamedTemporaryFile(delete=False) as temp:
+            file.save(temp)
+            temp_file_path = temp.name
+
+        # Find or create the target folder
+        mega_folder = m.find(MEGA_FOLDER_NAME)
+        if not mega_folder:
+            m.create_folder(MEGA_FOLDER_NAME)
+            mega_folder = m.find(MEGA_FOLDER_NAME)
+
+        # Upload the file to MEGA
+        m.upload(temp_file_path, mega_folder[0])
+
+        # Success redirect
+        return redirect(url_for('index', message_text=f"Success! File '{filename}' uploaded to MEGA.", message_class="msg-success"))
+
+    except Exception as e:
+        app.logger.error(f"File upload failed: {e}")
+        # Error redirect
+        return redirect(url_for('index', message_text=f"Upload Failed: An error occurred ({e})", message_class="msg-error"))
+
+    finally:
+        # Clean up the temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+# EXISTING SECURE ROUTE: Remains for API usage (not dashboard)
 @app.route('/upload', methods=['POST'])
-@require_api_key # <-- SECURITY APPLIED HERE
+@require_api_key 
 def upload_file():
     m = login_mega()
     if m is None:
@@ -81,13 +149,11 @@ def upload_file():
             file.save(temp)
             temp_file_path = temp.name
 
-        # Create the target folder if it doesn't exist
         mega_folder = m.find(MEGA_FOLDER_NAME)
         if not mega_folder:
             m.create_folder(MEGA_FOLDER_NAME)
             mega_folder = m.find(MEGA_FOLDER_NAME)
 
-        # Upload the file to MEGA
         m.upload(temp_file_path, mega_folder[0])
 
         return jsonify({
@@ -101,43 +167,8 @@ def upload_file():
         return jsonify({"status": "error", "message": f"An error occurred during upload: {e}"}), 500
 
     finally:
-        # Clean up the temporary file
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
 if __name__ == '__main__':
-    # This block is for local development only. Render uses gunicorn.
     app.run(debug=True)
-  GNU nano 7.2                                                                 local_server.py                                                                           
-import os
-from flask import Flask, request, jsonify
-from mega import Mega
-
-# --- CONFIGURATION (Render uses these environment variables) ---
-# NOTE: Render will require you to set these values in its dashboard
-MEGA_EMAIL = os.environ.get('MEGA_EMAIL')
-MEGA_PASSWORD = os.environ.get('MEGA_PASSWORD')
-MEGA_FOLDER_NAME = os.environ.get('MEGA_FOLDER_NAME', 'Uploaded_Data')
-
-app = Flask(__name__)
-
-# --- MEGA LOGIN & INITIALIZATION ---
-# This happens once when the server starts
-try:
-    # Attempt to log in to MEGA
-    mega = Mega()
-    m = mega.login(MEGA_EMAIL, MEGA_PASSWORD)
-    
-    # Check if the destination folder exists, create it if not
-    try:
-        remote_folder = m.find(MEGA_FOLDER_NAME)
-        if not remote_folder:
-            print(f"MEGA folder '{MEGA_FOLDER_NAME}' not found. Creating it...")
-            m.create_folder(MEGA_FOLDER_NAME)
-            remote_folder = m.find(MEGA_FOLDER_NAME)
-        print("Successfully connected to MEGA and located destination folder.")
-    except Exception as e:
-        print(f"Error finding/creating MEGA folder: {e}")
-        remote_folder = None
-
-except Exception as e:

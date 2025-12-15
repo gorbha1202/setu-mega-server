@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setu Mega :: Secure Control Panel</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --accent-color: #00bcd4; /* Cyan/Aqua accent */
+            --border-color: #333;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--accent-color);
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 15px;
+        }
+
+        .module {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #242424;
+        }
+
+        h2 {
+            color: var(--text-color);
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
+        }
+
+        /* Status Module */
+        .status-content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            padding: 15px;
+            border-radius: 6px;
+            flex-grow: 1;
+            min-width: 200px;
+            font-size: 0.9em;
+            border: 1px solid transparent;
+        }
+
+        .status-success { border-color: var(--success-color); background-color: #1c241c; }
+        .status-error { border-color: var(--error-color); background-color: #241c1c; }
+
+        .status-label { color: #888; font-weight: bold; display: block; margin-bottom: 5px; }
+        .status-value { font-size: 1.1em; }
+
+        /* Form Styling */
+        input[type="file"] {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: block;
+            margin-bottom: 15px;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        input[type="submit"] {
+            background-color: var(--accent-color);
+            color: var(--card-bg);
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #00a0b2;
+            transform: translateY(-2px);
+        }
+
+        /* Message Display */
+        #message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .msg-success { background-color: var(--success-color); color: var(--card-bg); }
+        .msg-error { background-color: var(--error-color); color: var(--card-bg); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span style="color:var(--text-color);">SETU MEGA</span> :: SECURE PANEL</h1>
+
+        <div class="module">
+            <h2>System Health</h2>
+            <div class="status-content">
+                <div class="status-item status-{{ status_class }}">
+                    <span class="status-label">Connection Status</span>
+                    <span class="status-value">{{ status_message }}</span>
+                </div>
+                {% if storage_total %}
+                <div class="status-item status-success">
+                    <span class="status-label">Storage (MEGA Free Tier)</span>
+                    <span class="status-value">{{ storage_used }} GB Used / {{ storage_total }} GB Total</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="module">
+            <h2>Secure Upload Interface</h2>
+            <form method="POST" action="/upload_via_dashboard" enctype="multipart/form-data">
+                <input type="file" name="file" required>
+                <input type="submit" value="EXECUTE UPLOAD">
+            </form>
+        </div>
+
+        {% if message_text %}
+            <div id="message" class="{{ message_class }}">
+                {{ message_text }}
+            </div>
+        {% endif %}
+        
+    </div>
+</body>
+</html>
